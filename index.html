@@ -655,6 +655,15 @@
                 alert('お使いのブラウザは音声認識に対応していません。');
             }
         }
+        // ここでグローバル登録
+        window.login = login;
+        window.logout = logout;
+        window.resetTopRightImage = resetTopRightImage;
+        window.setupSpeechRecognition = setupSpeechRecognition;
+        window.startRecording = startRecording;
+        window.generateCalendar = generateCalendar;
+        window.generateMonthCalendar = generateMonthCalendar;
+
 
         function startRecording() {
             if (!recognition) return;
