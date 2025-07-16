@@ -7,10 +7,6 @@
     <title>こうた・ちさね 夏休みタスク管理アプリ</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
-    <!-- Firebase App (core) -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-    <!-- Firebase Firestore -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
     <style>
         .calendar-day {
             transition: all 0.3s ease;
@@ -336,19 +332,6 @@
     </div>
 
     <script>
-        // Firebase設定
-        const firebaseConfig = {
-          apiKey: "AIzaSyBTPRuVIMujJYWKGIL_91tbmi4rBPyleAE",
-          authDomain: "summertask-35e3f.firebaseapp.com",
-          projectId: "summertask-35e3f",
-          storageBucket: "summertask-35e3f.firebasestorage.app",
-          messagingSenderId: "25120976501",
-          appId: "1:25120976501:web:9e16bfe539a5975f51123c",
-          measurementId: "G-ZDKKCYV8GE"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-
         // Global variables
         let currentUser = null;
         let currentChild = 'kouta';
@@ -371,21 +354,19 @@
         function initializeData() {
             const users = ['kouta', 'chisane'];
             users.forEach(user => {
-                db.collection('users').doc(user).get().then((doc) => {
-                    if (!doc.exists) {
-                        const userData = {
-                            points: 0,
-                            allowance: 0,
-                            paidAmount: 0,
-                            consecutiveDays: 0,
-                            lastCompletedDate: null,
-                            tasks: {},
-                            diaries: {},
-                            backgroundImage: null
-                        };
-                        db.collection('users').doc(user).set(userData);
-                    }
-                });
+                if (!localStorage.getItem(user + '_data')) {
+                    const userData = {
+                        points: 0,
+                        allowance: 0,
+                        paidAmount: 0,
+                        consecutiveDays: 0,
+                        lastCompletedDate: null,
+                        tasks: {},
+                        diaries: {},
+                        backgroundImage: null
+                    };
+                    localStorage.setItem(user + '_data', JSON.stringify(userData));
+                }
             });
         }
 
@@ -421,28 +402,24 @@
 
         // Load child data
         function loadChildData(childName) {
-            db.collection('users').doc(childName).get().then((doc) => {
-                if (doc.exists) {
-                    const data = doc.data();
-                    document.getElementById('currentPoints').textContent = data.points;
-                    document.getElementById('currentAllowance').textContent = `${data.allowance}円`;
-                    document.getElementById('consecutiveDays').textContent = calculateConsecutiveDays(data);
+            const data = JSON.parse(localStorage.getItem(childName + '_data'));
+            document.getElementById('currentPoints').textContent = data.points;
+            document.getElementById('currentAllowance').textContent = `${data.allowance}円`;
+            document.getElementById('consecutiveDays').textContent = calculateConsecutiveDays(data);
 
-                    const todayStr = getTodayStr();
-                    const taskToday = data.tasks ? data.tasks[todayStr] : null;
-                    if (taskToday && (taskToday.approved || taskToday.completed)) {
-                        document.getElementById('completeTaskBtn').textContent = '今日もよくがんばったね！';
-                        document.getElementById('completeTaskBtn').disabled = true;
-                        document.getElementById('completeTaskBtn').classList.add('bg-gray-400', 'cursor-not-allowed');
-                        document.getElementById('completeTaskBtn').classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
-                    } else {
-                        document.getElementById('completeTaskBtn').textContent = 'できた！';
-                        document.getElementById('completeTaskBtn').disabled = false;
-                        document.getElementById('completeTaskBtn').classList.remove('bg-gray-400', 'cursor-not-allowed');
-                        document.getElementById('completeTaskBtn').classList.add('bg-yellow-500', 'hover:bg-yellow-600');
-                    }
-                }
-            });
+            const todayStr = getTodayStr();
+            const taskToday = data.tasks[todayStr];
+            if (taskToday && (taskToday.approved || taskToday.completed)) {
+                document.getElementById('completeTaskBtn').textContent = '今日もよくがんばったね！';
+                document.getElementById('completeTaskBtn').disabled = true;
+                document.getElementById('completeTaskBtn').classList.add('bg-gray-400', 'cursor-not-allowed');
+                document.getElementById('completeTaskBtn').classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
+            } else {
+                document.getElementById('completeTaskBtn').textContent = 'できた！';
+                document.getElementById('completeTaskBtn').disabled = false;
+                document.getElementById('completeTaskBtn').classList.remove('bg-gray-400', 'cursor-not-allowed');
+                document.getElementById('completeTaskBtn').classList.add('bg-yellow-500', 'hover:bg-yellow-600');
+            }
         }
 
         // Parent dashboard functions
@@ -499,44 +476,39 @@
 
         // Approve task
         function approveTask(childName, dateStr) {
-            db.collection('users').doc(childName).get().then((doc) => {
-                if (!doc.exists) return;
-                const data = doc.data();
-                if (data.tasks && data.tasks[dateStr] && !data.tasks[dateStr].approved) {
-                    data.tasks[dateStr].approved = true;
-                    data.tasks[dateStr].completed = true;
+            const data = JSON.parse(localStorage.getItem(childName + '_data'));
+            if (data.tasks[dateStr] && !data.tasks[dateStr].approved) {
+                data.tasks[dateStr].approved = true;
+                data.tasks[dateStr].completed = true;
 
-                    data.points += 10;
-                    data.allowance += 10;
+                data.points += 10;
+                data.allowance += 10;
 
-                    const lastDate = data.lastCompletedDate ? new Date(data.lastCompletedDate) : null;
-                    const currentDate = new Date(dateStr);
-                    
-                    if (lastDate) {
-                        const diffTime = currentDate.getTime() - lastDate.getTime();
-                        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-                        if (diffDays === 1) {
-                            data.consecutiveDays = (data.consecutiveDays || 0) + 1;
-                        } else if (diffDays > 1) {
-                            data.consecutiveDays = 1;
-                        }
-                    } else {
+                const lastDate = data.lastCompletedDate ? new Date(data.lastCompletedDate) : null;
+                const currentDate = new Date(dateStr);
+                
+                if (lastDate) {
+                    const diffTime = currentDate.getTime() - lastDate.getTime();
+                    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                    if (diffDays === 1) {
+                        data.consecutiveDays = (data.consecutiveDays || 0) + 1;
+                    } else if (diffDays > 1) {
                         data.consecutiveDays = 1;
                     }
-
-                    if (data.consecutiveDays > 0 && data.consecutiveDays % 5 === 0) {
-                        data.allowance += 100;
-                        alert('5日連続達成ボーナス！100円ゲット！');
-                    }
-
-                    data.lastCompletedDate = dateStr;
-
-                    db.collection('users').doc(childName).set(data).then(() => {
-                        loadParentView(childName);
-                    });
+                } else {
+                    data.consecutiveDays = 1;
                 }
-            });
-        }
+
+                if (data.consecutiveDays > 0 && data.consecutiveDays % 5 === 0) {
+                    data.allowance += 100;
+                    alert('5日連続達成ボーナス！100円ゲット！');
+                }
+
+                data.lastCompletedDate = dateStr;
+
+                localStorage.setItem(childName + '_data', JSON.stringify(data));
+                loadParentView(childName);
+            }
         }
 
         // Record payment
@@ -547,44 +519,37 @@
                 return;
             }
 
-            db.collection('users').doc(currentChild).get().then((doc) => {
-                if (!doc.exists) return;
-                const data = doc.data();
-                if (amount > data.allowance) {
-                    alert('お小遣い残高を超えています。');
-                    return;
-                }
-                data.allowance -= amount;
-                data.paidAmount += amount;
-                db.collection('users').doc(currentChild).set(data).then(() => {
-                    document.getElementById('paymentAmount').value = '';
-                    loadParentView(currentChild);
-                });
-            });
+            const data = JSON.parse(localStorage.getItem(currentChild + '_data'));
+            if (amount > data.allowance) {
+                alert('お小遣い残高を超えています。');
+                return;
+            }
+
+            data.allowance -= amount;
+            data.paidAmount += amount;
+            localStorage.setItem(currentChild + '_data', JSON.stringify(data));
+            document.getElementById('paymentAmount').value = '';
+            loadParentView(currentChild);
         }
 
         // Load diary view
         function loadParentDiaryView(childName) {
-            db.collection('users').doc(childName).get().then((doc) => {
-                if (!doc.exists) return;
-                const data = doc.data();
-                const diaryViewDiv = document.getElementById('parentDiaryView');
-                diaryViewDiv.innerHTML = '';
+            const data = JSON.parse(localStorage.getItem(childName + '_data'));
+            const diaryViewDiv = document.getElementById('parentDiaryView');
+            diaryViewDiv.innerHTML = '';
 
-                const diaries = data.diaries || {};
-                const sortedDiaries = Object.entries(diaries).sort(([dateA], [dateB]) => new Date(dateB) - new Date(dateA));
+            const sortedDiaries = Object.entries(data.diaries).sort(([dateA], [dateB]) => new Date(dateB) - new Date(dateA));
 
-                if (sortedDiaries.length === 0) {
-                    diaryViewDiv.innerHTML = '<p class="text-gray-500">まだ日記はありません。</p>';
-                    return;
-                }
+            if (sortedDiaries.length === 0) {
+                diaryViewDiv.innerHTML = '<p class="text-gray-500">まだ日記はありません。</p>';
+                return;
+            }
 
-                sortedDiaries.forEach(([date, text]) => {
-                    const diaryEntry = document.createElement('div');
-                    diaryEntry.className = 'bg-gray-50 p-3 rounded-lg';
-                    diaryEntry.innerHTML = `<p class="font-bold text-gray-800">${date}</p><p class="whitespace-pre-wrap">${text}</p>`;
-                    diaryViewDiv.appendChild(diaryEntry);
-                });
+            sortedDiaries.forEach(([date, text]) => {
+                const diaryEntry = document.createElement('div');
+                diaryEntry.className = 'bg-gray-50 p-3 rounded-lg';
+                diaryEntry.innerHTML = `<p class="font-bold text-gray-800">${date}</p><p class="whitespace-pre-wrap">${text}</p>`;
+                diaryViewDiv.appendChild(diaryEntry);
             });
         }
 
@@ -597,39 +562,30 @@
                     const imageUrl = e.target.result;
                     document.getElementById('topRightImage').src = imageUrl;
                     document.getElementById('topRightImageContainer').style.display = 'block';
-                    db.collection('users').doc(currentUser).get().then((doc) => {
-                        if (!doc.exists) return;
-                        const data = doc.data();
-                        data.backgroundImage = imageUrl;
-                        db.collection('users').doc(currentUser).set(data);
-                    });
+                    const data = JSON.parse(localStorage.getItem(currentUser + '_data'));
+                    data.backgroundImage = imageUrl;
+                    localStorage.setItem(currentUser + '_data', JSON.stringify(data));
                 }
                 reader.readAsDataURL(input.files[0]);
             }
         }
 
         function loadTopRightImage(childName) {
-            db.collection('users').doc(childName).get().then((doc) => {
-                if (!doc.exists) return;
-                const data = doc.data();
-                if (data.backgroundImage) {
-                    document.getElementById('topRightImage').src = data.backgroundImage;
-                    document.getElementById('topRightImageContainer').style.display = 'block';
-                } else {
-                    document.getElementById('topRightImageContainer').style.display = 'none';
-                }
-            });
+            const data = JSON.parse(localStorage.getItem(childName + '_data'));
+            if (data.backgroundImage) {
+                document.getElementById('topRightImage').src = data.backgroundImage;
+                document.getElementById('topRightImageContainer').style.display = 'block';
+            } else {
+                document.getElementById('topRightImageContainer').style.display = 'none';
+            }
         }
 
         function resetTopRightImage() {
             document.getElementById('topRightImage').src = '';
             document.getElementById('topRightImageContainer').style.display = 'none';
-            db.collection('users').doc(currentUser).get().then((doc) => {
-                if (!doc.exists) return;
-                const data = doc.data();
-                data.backgroundImage = null;
-                db.collection('users').doc(currentUser).set(data);
-            });
+            const data = JSON.parse(localStorage.getItem(currentUser + '_data'));
+            data.backgroundImage = null;
+            localStorage.setItem(currentUser + '_data', JSON.stringify(data));
         }
 
         // Voice recognition
@@ -767,53 +723,48 @@
         function completeTask(selectedDate) {
             if (!currentUser || currentUser === 'parent') return;
             const dateStr = selectedDate;
-            db.collection('users').doc(currentUser).get().then((doc) => {
-                if (!doc.exists) return;
-                const data = doc.data();
-                if (data.tasks && data.tasks[dateStr] && data.tasks[dateStr].approved) {
-                    alert('この日のタスクはもう承認済みです。');
-                    return;
-                }
-                document.getElementById('diarySection').classList.remove('hidden');
-                document.getElementById('diaryText').textContent = (data.diaries && data.diaries[dateStr]) || '';
-                document.getElementById('diaryText').focus();
-                currentEditingDate = dateStr;
-                document.getElementById('completeTaskBtn').classList.add('hidden');
-                document.getElementById('saveDiaryBtn').classList.remove('hidden');
-            });
+            const data = JSON.parse(localStorage.getItem(currentUser + '_data'));
+
+            if (data.tasks[dateStr] && data.tasks[dateStr].approved) {
+                alert('この日のタスクはもう承認済みです。');
+                return;
+            }
+
+            document.getElementById('diarySection').classList.remove('hidden');
+            document.getElementById('diaryText').textContent = data.diaries[dateStr] || '';
+            document.getElementById('diaryText').focus();
+            currentEditingDate = dateStr;
+
+            document.getElementById('completeTaskBtn').classList.add('hidden');
+            document.getElementById('saveDiaryBtn').classList.remove('hidden');
         }
 
         function saveDiary() {
             if (!currentUser || currentUser === 'parent') return;
             const dateToSave = currentEditingDate || getTodayStr();
+            const data = JSON.parse(localStorage.getItem(currentUser + '_data'));
             const diaryText = document.getElementById('diaryText').textContent;
 
-            db.collection('users').doc(currentUser).get().then((doc) => {
-                if (!doc.exists) return;
-                const data = doc.data();
-                if (!data.diaries) data.diaries = {};
-                if (!data.tasks) data.tasks = {};
-                data.diaries[dateToSave] = diaryText;
-                if (!data.tasks[dateToSave]) {
-                    data.tasks[dateToSave] = {
-                        completed: true,
-                        approved: false,
-                        completionTime: new Date().toISOString()
-                    };
-                } else {
-                    data.tasks[dateToSave].completed = true;
-                    data.tasks[dateToSave].completionTime = new Date().toISOString();
-                }
-                db.collection('users').doc(currentUser).set(data).then(() => {
-                    alert('日記を保存し、お父さん・お母さんに知らせました！');
-                    document.getElementById('diarySection').classList.add('hidden');
-                    document.getElementById('saveDiaryBtn').classList.add('hidden');
-                    document.getElementById('completeTaskBtn').classList.remove('hidden');
-                    currentEditingDate = null;
-                    generateCalendar();
-                    loadChildData(currentUser);
-                });
-            });
+            data.diaries[dateToSave] = diaryText;
+
+            if (!data.tasks[dateToSave]) {
+                data.tasks[dateToSave] = {
+                    completed: true, // 子供が保存した時点でcompleted
+                    approved: false,
+                    completionTime: new Date().toISOString()
+                };
+            }
+
+            localStorage.setItem(currentUser + '_data', JSON.stringify(data));
+
+            alert('日記を保存し、お父さん・お母さんに知らせました！');
+            document.getElementById('diarySection').classList.add('hidden');
+            document.getElementById('saveDiaryBtn').classList.add('hidden');
+            document.getElementById('completeTaskBtn').classList.remove('hidden');
+            currentEditingDate = null;
+
+            generateCalendar();
+            loadChildData(currentUser);
         }
 
         // Modal functions
